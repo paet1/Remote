@@ -11,26 +11,77 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/app_name"
-        android:textSize="22sp"
+        android:textSize="20sp"
         android:textStyle="bold"
         android:textColor="@color/textPrimary"
         android:layout_gravity="center_horizontal"
-        android:layout_marginBottom="12dp"/>
+        android:layout_marginBottom="8dp"/>
 
-    <Button
-        android:id="@+id/btnConnect"
+    <!-- SOC display -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/connect"
-        android:backgroundTint="@color/accent"
-        android:textColor="@android:color/white"
-        android:layout_marginBottom="16dp"/>
+        android:orientation="vertical"
+        android:background="@drawable/card_bg"
+        android:padding="12dp"
+        android:layout_marginBottom="8dp">
 
+        <TextView
+            android:id="@+id/tvSoc"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/soc_placeholder"
+            android:textSize="42sp"
+            android:textStyle="bold"
+            android:textColor="@color/socText"
+            android:layout_gravity="center_horizontal"/>
+
+        <TextView
+            android:id="@+id/tvBattInfo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/batt_placeholder"
+            android:textSize="13sp"
+            android:textColor="@color/textSecondary"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="2dp"/>
+    </LinearLayout>
+
+    <!-- Connect + SOC polling -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:layout_marginBottom="8dp">
+
+        <Button
+            android:id="@+id/btnConnect"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/connect"
+            android:backgroundTint="@color/accent"
+            android:textColor="@android:color/white"
+            android:layout_marginEnd="4dp"/>
+
+        <Button
+            android:id="@+id/btnSoc"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/soc_start"
+            android:backgroundTint="@color/btnSoc"
+            android:textColor="@android:color/white"
+            android:layout_marginStart="4dp"
+            android:enabled="false"/>
+    </LinearLayout>
+
+    <!-- Lock / Unlock -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="4dp">
 
         <Button
             android:id="@+id/btnLock"
@@ -40,7 +91,19 @@
             android:text="@string/lock"
             android:backgroundTint="@color/btnLock"
             android:textColor="@android:color/white"
-            android:layout_marginEnd="4dp"
+            android:layout_marginEnd="2dp"
+            android:enabled="false"/>
+
+        <Button
+            android:id="@+id/btnUnlockDrv"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/unlock_drv"
+            android:backgroundTint="@color/btnUnlock"
+            android:textColor="@android:color/white"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="2dp"
             android:enabled="false"/>
 
         <Button
@@ -51,15 +114,16 @@
             android:text="@string/unlock"
             android:backgroundTint="@color/btnUnlock"
             android:textColor="@android:color/white"
-            android:layout_marginStart="4dp"
+            android:layout_marginStart="2dp"
             android:enabled="false"/>
     </LinearLayout>
 
+    <!-- Preheat / Trunk -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginBottom="16dp">
+        android:layout_marginBottom="8dp">
 
         <Button
             android:id="@+id/btnHeatOn"
@@ -69,7 +133,7 @@
             android:text="@string/preheat_on"
             android:backgroundTint="@color/btnHeatOn"
             android:textColor="@android:color/white"
-            android:layout_marginEnd="4dp"
+            android:layout_marginEnd="2dp"
             android:enabled="false"/>
 
         <Button
@@ -80,18 +144,31 @@
             android:text="@string/preheat_off"
             android:backgroundTint="@color/btnHeatOff"
             android:textColor="@android:color/white"
-            android:layout_marginStart="4dp"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="2dp"
+            android:enabled="false"/>
+
+        <Button
+            android:id="@+id/btnTrunk"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/trunk"
+            android:backgroundTint="@color/btnTrunk"
+            android:textColor="@android:color/white"
+            android:layout_marginStart="2dp"
             android:enabled="false"/>
     </LinearLayout>
 
+    <!-- Log -->
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/log_label"
-        android:textSize="14sp"
+        android:textSize="13sp"
         android:textStyle="bold"
         android:textColor="@color/textSecondary"
-        android:layout_marginBottom="4dp"/>
+        android:layout_marginBottom="2dp"/>
 
     <ScrollView
         android:id="@+id/scrollLog"
@@ -99,13 +176,13 @@
         android:layout_height="0dp"
         android:layout_weight="1"
         android:background="@color/logBackground"
-        android:padding="8dp">
+        android:padding="6dp">
 
         <TextView
             android:id="@+id/tvLog"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:fontFamily="monospace"
             android:textColor="@color/logText"/>
     </ScrollView>

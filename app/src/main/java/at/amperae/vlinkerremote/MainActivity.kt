@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.text.method.ScrollingMovementMethod
 import android.widget.Button
 import android.widget.ScrollView
 import android.widget.TextView
@@ -12,40 +11,51 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import java.util.Locale
 
 class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
 
     companion object {
-        private const val PERM_REQUEST = 1
+        private const val PERM_REQ = 1
     }
 
     private lateinit var ble: VLinkerBle
 
+    private lateinit var tvSoc: TextView
+    private lateinit var tvBattInfo: TextView
     private lateinit var btnConnect: Button
+    private lateinit var btnSoc: Button
     private lateinit var btnLock: Button
+    private lateinit var btnUnlockDrv: Button
     private lateinit var btnUnlock: Button
     private lateinit var btnHeatOn: Button
     private lateinit var btnHeatOff: Button
+    private lateinit var btnTrunk: Button
     private lateinit var tvLog: TextView
-    private lateinit var scrollView: ScrollView
+    private lateinit var scrollLog: ScrollView
+
+    private var socPolling = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        btnConnect = findViewById(R.id.btnConnect)
-        btnLock    = findViewById(R.id.btnLock)
-        btnUnlock  = findViewById(R.id.btnUnlock)
-        btnHeatOn  = findViewById(R.id.btnHeatOn)
-        btnHeatOff = findViewById(R.id.btnHeatOff)
-        tvLog      = findViewById(R.id.tvLog)
-        scrollView = findViewById(R.id.scrollLog)
-
-        tvLog.movementMethod = ScrollingMovementMethod()
+        tvSoc       = findViewById(R.id.tvSoc)
+        tvBattInfo  = findViewById(R.id.tvBattInfo)
+        btnConnect  = findViewById(R.id.btnConnect)
+        btnSoc      = findViewById(R.id.btnSoc)
+        btnLock     = findViewById(R.id.btnLock)
+        btnUnlockDrv= findViewById(R.id.btnUnlockDrv)
+        btnUnlock   = findViewById(R.id.btnUnlock)
+        btnHeatOn   = findViewById(R.id.btnHeatOn)
+        btnHeatOff  = findViewById(R.id.btnHeatOff)
+        btnTrunk    = findViewById(R.id.btnTrunk)
+        tvLog       = findViewById(R.id.tvLog)
+        scrollLog   = findViewById(R.id.scrollLog)
 
         ble = VLinkerBle(this, this)
-
-        setCommandButtonsEnabled(false)
+        setRemoteButtonsEnabled(false)
+        btnSoc.isEnabled = false
 
         btnConnect.setOnClickListener {
             if (ble.isConnected) {
@@ -56,10 +66,24 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
             }
         }
 
-        btnLock.setOnClickListener    { confirmAndRun("Lock vehicle?")    { ble.lock() } }
-        btnUnlock.setOnClickListener  { confirmAndRun("Unlock vehicle?")  { ble.unlock() } }
-        btnHeatOn.setOnClickListener  { confirmAndRun("Preheat ON?")      { ble.preheatOn() } }
-        btnHeatOff.setOnClickListener { confirmAndRun("Preheat OFF?")     { ble.preheatOff() } }
+        btnSoc.setOnClickListener {
+            if (socPolling) {
+                ble.stopSocPolling()
+                socPolling = false
+                btnSoc.text = getString(R.string.soc_start)
+            } else {
+                ble.startSocPolling()
+                socPolling = true
+                btnSoc.text = getString(R.string.soc_stop)
+            }
+        }
+
+        btnLock.setOnClickListener      { confirm("Lock vehicle?")       { ble.lock() } }
+        btnUnlockDrv.setOnClickListener  { confirm("Unlock driver door?") { ble.unlockDrv() } }
+        btnUnlock.setOnClickListener     { confirm("Unlock all doors?")   { ble.unlock() } }
+        btnHeatOn.setOnClickListener     { confirm("Preheat ON?")         { ble.preheatOn() } }
+        btnHeatOff.setOnClickListener    { confirm("Preheat OFF?")        { ble.preheatOff() } }
+        btnTrunk.setOnClickListener      { confirm("Open trunk?")         { ble.trunk() } }
     }
 
     override fun onDestroy() {
@@ -72,40 +96,63 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
     override fun onLog(message: String) {
         runOnUiThread {
             tvLog.append("$message\n")
-            scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
+            scrollLog.post { scrollLog.fullScroll(ScrollView.FOCUS_DOWN) }
         }
     }
 
     override fun onConnectionStateChanged(connected: Boolean) {
         runOnUiThread {
             btnConnect.text = if (connected) "Disconnect" else "Connect"
-            setCommandButtonsEnabled(connected)
+            btnSoc.isEnabled = connected
+            setRemoteButtonsEnabled(connected)
+            if (!connected) {
+                socPolling = false
+                btnSoc.text = getString(R.string.soc_start)
+                tvSoc.text = getString(R.string.soc_placeholder)
+                tvBattInfo.text = getString(R.string.batt_placeholder)
+            }
         }
     }
 
-    override fun onCommandSequenceFinished(success: Boolean) {
+    override fun onSocUpdate(socPercent: Float) {
         runOnUiThread {
-            onLog(if (success) "✓ Sequence complete" else "✗ Sequence failed")
-            setCommandButtonsEnabled(ble.isConnected)
+            tvSoc.text = String.format(Locale.US, "%.1f %%", socPercent)
         }
+    }
+
+    override fun onBatteryInfo(tempC: Int?, voltageV: Float?, currentA: Float?, capacityKwh: Float?) {
+        runOnUiThread {
+            val parts = mutableListOf<String>()
+            tempC?.let       { parts += "${it} °C" }
+            voltageV?.let    { parts += String.format(Locale.US, "%.0f V", it) }
+            currentA?.let    { parts += String.format(Locale.US, "%.1f A", it) }
+            capacityKwh?.let { parts += String.format(Locale.US, "%.1f kWh", it) }
+            tvBattInfo.text = if (parts.isNotEmpty()) parts.joinToString("  ·  ") else "Polling …"
+        }
+    }
+
+    override fun onCommandDone(command: String, success: Boolean) {
+        runOnUiThread { setRemoteButtonsEnabled(ble.isConnected) }
     }
 
     // ── helpers ──
 
-    private fun setCommandButtonsEnabled(enabled: Boolean) {
-        btnLock.isEnabled = enabled
-        btnUnlock.isEnabled = enabled
-        btnHeatOn.isEnabled = enabled
-        btnHeatOff.isEnabled = enabled
+    private fun setRemoteButtonsEnabled(on: Boolean) {
+        btnLock.isEnabled = on
+        btnUnlockDrv.isEnabled = on
+        btnUnlock.isEnabled = on
+        btnHeatOn.isEnabled = on
+        btnHeatOff.isEnabled = on
+        btnTrunk.isEnabled = on
     }
 
-    private fun confirmAndRun(title: String, action: () -> Unit) {
-        setCommandButtonsEnabled(false)
+    private fun confirm(title: String, action: () -> Unit) {
+        setRemoteButtonsEnabled(false)
         AlertDialog.Builder(this)
             .setTitle(title)
             .setMessage("Send command to vehicle?")
             .setPositiveButton("Yes") { _, _ -> action() }
-            .setNegativeButton("Cancel") { _, _ -> setCommandButtonsEnabled(ble.isConnected) }
+            .setNegativeButton("Cancel") { _, _ -> setRemoteButtonsEnabled(ble.isConnected) }
             .setCancelable(false)
             .show()
     }
@@ -118,18 +165,18 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
         val needed = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN)
-                != PackageManager.PERMISSION_GRANTED) needed.add(Manifest.permission.BLUETOOTH_SCAN)
+                != PackageManager.PERMISSION_GRANTED) needed += Manifest.permission.BLUETOOTH_SCAN
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
-                != PackageManager.PERMISSION_GRANTED) needed.add(Manifest.permission.BLUETOOTH_CONNECT)
+                != PackageManager.PERMISSION_GRANTED) needed += Manifest.permission.BLUETOOTH_CONNECT
         } else {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED) needed.add(Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) needed += Manifest.permission.ACCESS_FINE_LOCATION
         }
         if (needed.isEmpty()) {
             action()
         } else {
             pendingAction = action
-            ActivityCompat.requestPermissions(this, needed.toTypedArray(), PERM_REQUEST)
+            ActivityCompat.requestPermissions(this, needed.toTypedArray(), PERM_REQ)
         }
     }
 
@@ -137,7 +184,7 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
         requestCode: Int, permissions: Array<out String>, grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == PERM_REQUEST && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+        if (requestCode == PERM_REQ && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
             pendingAction?.invoke()
         } else {
             onLog("Permissions denied")

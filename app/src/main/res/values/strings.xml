@@ -3,8 +3,14 @@
     <string name="app_name">Ampera-e Remote</string>
     <string name="connect">Connect</string>
     <string name="lock">Lock</string>
-    <string name="unlock">Unlock</string>
-    <string name="preheat_on">Preheat ON</string>
-    <string name="preheat_off">Preheat OFF</string>
+    <string name="unlock">Unlock All</string>
+    <string name="unlock_drv">Unlock Drv</string>
+    <string name="preheat_on">Heat ON</string>
+    <string name="preheat_off">Heat OFF</string>
+    <string name="trunk">Trunk</string>
     <string name="log_label">BLE Log</string>
+    <string name="soc_start">SOC Start</string>
+    <string name="soc_stop">SOC Stop</string>
+    <string name="soc_placeholder">– – %</string>
+    <string name="batt_placeholder">Not connected</string>
 </resources>
