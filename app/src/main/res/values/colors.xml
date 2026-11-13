@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="background">#FF1A1A2E</color>
+    <color name="textPrimary">#FFE0E0E0</color>
+    <color name="textSecondary">#FF9E9E9E</color>
+
+    <color name="accent">#FF2196F3</color>
+    <color name="btnLock">#FF4CAF50</color>
+    <color name="btnUnlock">#FFFF9800</color>
+    <color name="btnHeatOn">#FFF44336</color>
+    <color name="btnHeatOff">#FF607D8B</color>
+
+    <color name="logBackground">#FF0D0D1A</color>
+    <color name="logText">#FF00E676</color>
+
+    <color name="colorPrimary">#FF1565C0</color>
+    <color name="colorPrimaryDark">#FF0D47A1</color>
+    <color name="colorAccent">#FF2196F3</color>
+</resources>
