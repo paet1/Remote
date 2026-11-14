@@ -10,15 +10,14 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
 
 /**
- * BLE transport for vLinker MC-IOS ELM327/STN-compatible adapter.
+ * BLE transport for vLinker MC-IOS (ELM327/STN-compatible).
  *
- * Two buses are used:
- *  - HS-CAN (protocol 6, 500 kbps) for OBD-II diagnostic polls (SOC, battery temp, …)
- *  - SWCAN  (protocol STP 61, 33.3 kbps) for vehicle remote commands (lock, unlock, preheat)
+ * Command sequences are reproduced byte-for-byte from tested nRF Connect macros
+ * that have been proven to work on a real Ampera-e / Bolt EV.
  *
- * ELM327 responses arrive as BLE notification fragments; this class accumulates
- * bytes until the '>' prompt appears, then delivers the complete response to the
- * queued command callback.
+ * Two buses:
+ *  - HS-CAN (STP 6 / protocol 6, 500 kbps) → OBD-II diagnostic polls (SOC, temps …)
+ *  - SWCAN  (STP 61/62, 33.3 kbps)          → vehicle remote commands
  */
 @SuppressLint("MissingPermission")
 class VLinkerBle(
@@ -37,15 +36,14 @@ class VLinkerBle(
     companion object {
         const val DEVICE_NAME = "vLinker MC-IOS"
 
-        val SERVICE_UUID: UUID  = UUID.fromString("000018f0-0000-1000-8000-00805f9b34fb")
-        val RX_CHAR_UUID: UUID  = UUID.fromString("00002af0-0000-1000-8000-00805f9b34fb")
-        val TX_CHAR_UUID: UUID  = UUID.fromString("00002af1-0000-1000-8000-00805f9b34fb")
+        val SERVICE_UUID: UUID   = UUID.fromString("000018f0-0000-1000-8000-00805f9b34fb")
+        val RX_CHAR_UUID: UUID   = UUID.fromString("00002af0-0000-1000-8000-00805f9b34fb")
+        val TX_CHAR_UUID: UUID   = UUID.fromString("00002af1-0000-1000-8000-00805f9b34fb")
         val CCC_DESCRIPTOR: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
-        private const val SCAN_TIMEOUT_MS  = 15_000L
-        private const val CMD_TIMEOUT_MS   = 4_000L
-        private const val STEP_DELAY_MS    = 120L
-        private const val WAKE_DELAY_MS    = 600L
+        private const val SCAN_TIMEOUT_MS = 15_000L
+        private const val CMD_TIMEOUT_MS  = 4_000L
+        private const val POLL_INTERVAL_MS = 5_000L
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -59,8 +57,6 @@ class VLinkerBle(
 
     val isConnected: Boolean get() = gatt != null && txChar != null
 
-    // ── response accumulation ──
-
     private val rxBuffer = StringBuilder()
     private var pendingCallback: ((String) -> Unit)? = null
     private var timeoutRunnable: Runnable? = null
@@ -69,29 +65,22 @@ class VLinkerBle(
     @Volatile private var cmdBusy = false
     @Volatile private var sequenceBusy = false
 
-    // ── polling ──
-
     private var pollingActive = false
     private var pollRunnable: Runnable? = null
-    private val POLL_INTERVAL_MS = 5_000L
 
     // ────────────────────────────── BLE scan ──────────────────────────────
 
     fun scanAndConnect() {
         val s = adapter?.bluetoothLeScanner
         if (s == null) {
-            listener.onLog("BLE scanner not available")
-            return
+            listener.onLog("BLE scanner not available"); return
         }
         scanner = s
         listener.onLog("Scanning for $DEVICE_NAME …")
 
-        val filters = listOf(
-            ScanFilter.Builder().setDeviceName(DEVICE_NAME).build()
-        )
+        val filters = listOf(ScanFilter.Builder().setDeviceName(DEVICE_NAME).build())
         val settings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-            .build()
+            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
 
         s.startScan(filters, settings, scanCallback)
         handler.postDelayed({
@@ -106,11 +95,9 @@ class VLinkerBle(
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             stopScan()
-            val device = result.device
-            listener.onLog("Found ${device.name ?: device.address}")
-            device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+            listener.onLog("Found ${result.device.name ?: result.device.address}")
+            result.device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
         }
-
         override fun onScanFailed(errorCode: Int) {
             listener.onLog("Scan failed: $errorCode")
             listener.onConnectionStateChanged(false)
@@ -141,25 +128,21 @@ class VLinkerBle(
 
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
             if (status != BluetoothGatt.GATT_SUCCESS) {
-                listener.onLog("Service discovery failed")
-                disconnect(); return
+                listener.onLog("Service discovery failed"); disconnect(); return
             }
             val svc = g.getService(SERVICE_UUID)
             if (svc == null) {
-                listener.onLog("vLinker service not found")
-                disconnect(); return
+                listener.onLog("vLinker service not found"); disconnect(); return
             }
             txChar = svc.getCharacteristic(TX_CHAR_UUID)
             rxChar = svc.getCharacteristic(RX_CHAR_UUID)
             if (txChar == null || rxChar == null) {
-                listener.onLog("TX/RX characteristics missing")
-                disconnect(); return
+                listener.onLog("TX/RX characteristics missing"); disconnect(); return
             }
             gatt = g
 
             g.setCharacteristicNotification(rxChar, true)
-            val desc = rxChar!!.getDescriptor(CCC_DESCRIPTOR)
-            if (desc != null) {
+            rxChar!!.getDescriptor(CCC_DESCRIPTOR)?.let { desc ->
                 desc.value = BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
                 g.writeDescriptor(desc)
             }
@@ -202,9 +185,8 @@ class VLinkerBle(
 
     private fun onFragment(fragment: String) {
         rxBuffer.append(fragment)
-        val buf = rxBuffer.toString()
-        if (buf.contains('>')) {
-            val response = buf.substringBefore('>').trim()
+        if (rxBuffer.contains('>')) {
+            val response = rxBuffer.toString().substringBefore('>').trim()
             rxBuffer.clear()
             completeCurrentCommand(response)
         }
@@ -252,35 +234,27 @@ class VLinkerBle(
         g.writeCharacteristic(tx)
     }
 
-    /** Send one AT/data command, wait for complete response, then call [onDone]. */
     private fun send(cmd: String, onDone: (String) -> Unit) {
         listener.onLog("→ $cmd")
         enqueue(cmd, onDone)
     }
 
-    /** Fire-and-forget for AT commands that just return OK. */
-    private fun sendOk(cmd: String, then: () -> Unit) {
-        send(cmd) { resp ->
-            if (!resp.contains("OK") && !resp.isBlank() && resp != "TIMEOUT") {
-                listener.onLog("⚠ $cmd → $resp")
-            }
-            handler.postDelayed(then, STEP_DELAY_MS)
-        }
-    }
+    // ───────── run a timed sequence (cmd + delay pairs) ─────────
 
-    // ──────────────── run a sequence of commands ────────────────
+    data class Step(val cmd: String, val delayAfterMs: Long)
 
-    private fun runSteps(steps: List<String>, delayMs: Long = STEP_DELAY_MS, done: (Boolean) -> Unit) {
+    private fun runTimedSteps(steps: List<Step>, done: (Boolean) -> Unit) {
         if (steps.isEmpty()) { done(true); return }
-        val first = steps.first()
+        val step = steps.first()
         val rest = steps.drop(1)
-        send(first) { resp ->
+        send(step.cmd) { resp ->
             val line = resp.lines().lastOrNull()?.trim() ?: resp.trim()
-            listener.onLog("← $line")
-            if (line == "?" || line.contains("ERROR")) {
+            if (line.isNotBlank()) listener.onLog("← $line")
+            if (line == "?") {
+                listener.onLog("⚠ Command not supported: ${step.cmd}")
                 done(false)
             } else {
-                handler.postDelayed({ runSteps(rest, delayMs, done) }, delayMs)
+                handler.postDelayed({ runTimedSteps(rest, done) }, step.delayAfterMs)
             }
         }
     }
@@ -289,10 +263,13 @@ class VLinkerBle(
 
     private fun initAdapter() {
         listener.onLog("Initialising adapter …")
-        val initCmds = listOf("ATZ", "ATE0", "ATL0", "ATS1")
-        runSteps(initCmds, 300L) { ok ->
-            if (ok) listener.onLog("Adapter ready")
-            else    listener.onLog("⚠ Init incomplete")
+        runTimedSteps(listOf(
+            Step("ATZ",  1200),
+            Step("ATE0",  200),
+            Step("ATL0",  150),
+            Step("ATS1",  150)
+        )) { ok ->
+            listener.onLog(if (ok) "Adapter ready" else "⚠ Init incomplete")
         }
     }
 
@@ -304,9 +281,7 @@ class VLinkerBle(
         if (pollingActive) return
         pollingActive = true
         listener.onLog("Starting SOC polling …")
-        setupHsCan {
-            schedulePoll()
-        }
+        setupHsCan { schedulePoll() }
     }
 
     fun stopSocPolling() {
@@ -317,17 +292,13 @@ class VLinkerBle(
     }
 
     private fun setupHsCan(then: () -> Unit) {
-        val setup = listOf(
-            "ATSP6",       // ISO 15765-4 CAN 500 kbps 11-bit
-            "ATST96",      // timeout ~600 ms
-            "ATAL",        // allow long messages
-            "ATH0",        // headers off for cleaner parsing
-            "ATS1"         // spaces on
-        )
-        runSteps(setup, 200L) { ok ->
-            if (!ok) listener.onLog("⚠ HS-CAN setup issue")
-            then()
-        }
+        runTimedSteps(listOf(
+            Step("ATSP6",  200),   // ISO 15765-4 CAN 500 kbps 11-bit
+            Step("ATST96", 200),   // timeout ~600 ms
+            Step("ATAL",   150),   // allow long messages
+            Step("ATH0",   150),   // headers off for cleaner parsing
+            Step("ATS1",   150)    // spaces on
+        )) { _ -> then() }
     }
 
     private fun schedulePoll() {
@@ -336,30 +307,30 @@ class VLinkerBle(
     }
 
     private fun pollSoc() {
-        sendOk("ATSH7E4") {
-            send("228334") { resp ->
-                parseSocResponse(resp)
-                if (pollingActive) pollBatteryInfo()
-            }
+        send("ATSH7E4") { _ ->
+            handler.postDelayed({
+                send("228334") { resp ->
+                    parseSocResponse(resp)
+                    if (pollingActive) pollBatteryInfo()
+                }
+            }, 100)
         }
     }
 
     private fun parseSocResponse(resp: String) {
-        // Expected: "62 83 34 XX" where XX is SOC byte
-        val cleaned = resp.replace("\r", " ").replace("\n", " ").trim()
-        val parts = cleaned.split("\\s+".toRegex())
+        val parts = resp.replace("\r", " ").replace("\n", " ").trim()
+            .split("\\s+".toRegex())
         val idx = parts.indexOfFirst { it.equals("62", true) }
         if (idx >= 0 && idx + 3 < parts.size
             && parts[idx + 1].equals("83", true)
             && parts[idx + 2].equals("34", true)
         ) {
-            val socByte = parts[idx + 3].toIntOrNull(16)
-            if (socByte != null) {
-                val soc = socByte * 100f / 255f
-                listener.onSocUpdate(soc)
+            parts[idx + 3].toIntOrNull(16)?.let { b ->
+                listener.onSocUpdate(b * 100f / 255f)
                 return
             }
         }
+        val cleaned = resp.trim()
         if (!cleaned.contains("NO DATA", true) && cleaned.isNotBlank()) {
             listener.onLog("SOC parse: $cleaned")
         }
@@ -368,25 +339,22 @@ class VLinkerBle(
     private fun pollBatteryInfo() {
         send("22434F") { tempResp ->
             val tempC = parseSingleByte(tempResp, "43", "4F")?.let { it - 40 }
-
             send("22436B") { vResp ->
                 val voltage = parseTwoBytes(vResp, "43", "6B")?.let { it / 2f }
-
                 send("22436C") { cResp ->
                     val current = parseTwoBytes(cResp, "43", "6C")?.let { it / 20f }
-
-                    sendOk("ATSH7E4") {
-                        send("2245F9") { capResp ->
-                            val cap = parseTwoBytes(capResp, "45", "F9")?.let { it * 0.0032f }
-
-                            listener.onBatteryInfo(tempC, voltage, current, cap)
-
-                            if (pollingActive) {
-                                val r = Runnable { schedulePoll() }
-                                pollRunnable = r
-                                handler.postDelayed(r, POLL_INTERVAL_MS)
+                    send("ATSH7E4") { _ ->
+                        handler.postDelayed({
+                            send("2245F9") { capResp ->
+                                val cap = parseTwoBytes(capResp, "45", "F9")?.let { it * 0.0032f }
+                                listener.onBatteryInfo(tempC, voltage, current, cap)
+                                if (pollingActive) {
+                                    val r = Runnable { schedulePoll() }
+                                    pollRunnable = r
+                                    handler.postDelayed(r, POLL_INTERVAL_MS)
+                                }
                             }
-                        }
+                        }, 100)
                     }
                 }
             }
@@ -394,19 +362,19 @@ class VLinkerBle(
     }
 
     private fun parseSingleByte(resp: String, pidHi: String, pidLo: String): Int? {
-        val parts = resp.replace("\r", " ").replace("\n", " ").trim().split("\\s+".toRegex())
+        val parts = resp.replace("\r", " ").replace("\n", " ").trim()
+            .split("\\s+".toRegex())
         val idx = parts.indexOfFirst { it.equals("62", true) }
         if (idx >= 0 && idx + 3 < parts.size
             && parts[idx + 1].equals(pidHi, true)
             && parts[idx + 2].equals(pidLo, true)
-        ) {
-            return parts[idx + 3].toIntOrNull(16)
-        }
+        ) return parts[idx + 3].toIntOrNull(16)
         return null
     }
 
     private fun parseTwoBytes(resp: String, pidHi: String, pidLo: String): Float? {
-        val parts = resp.replace("\r", " ").replace("\n", " ").trim().split("\\s+".toRegex())
+        val parts = resp.replace("\r", " ").replace("\n", " ").trim()
+            .split("\\s+".toRegex())
         val idx = parts.indexOfFirst { it.equals("62", true) }
         if (idx >= 0 && idx + 4 < parts.size
             && parts[idx + 1].equals(pidHi, true)
@@ -420,121 +388,106 @@ class VLinkerBle(
     }
 
     // ═══════════════════════════════════════════════════════════════
-    //  REMOTE COMMANDS  –  via SWCAN (STP 61, 33.3 kbps)
+    //  REMOTE COMMANDS  –  via SWCAN
+    //
+    //  Sequences reproduced 1:1 from tested nRF Connect macros:
+    //    AmperaE_OVMS_Wake_PREHEAT_ON_nRF.xml
+    //    AmperaE_OVMS_Wake_UNLOCK_nRF.xml
+    //    AmperaE_PREHEAT_OFF_nRF.xml
     // ═══════════════════════════════════════════════════════════════
 
-    fun lock()       = executeRemote("Lock",       "00 01 FF", "0C 00 FF", "00 00 FF")
-    fun unlock()     = executeRemote("Unlock all", "00 03 FF", "0C 00 FF", "00 00 FF")
-    fun unlockDrv()  = executeRemote("Unlock drv", "00 02 FF", "0C 00 FF", "00 00 FF")
-    fun preheatOn()  = executeRemote("Preheat ON", "00 01 FF", "80 01 FF", "00 00 FF")
-    fun preheatOff() = executeRemote("Preheat OFF","00 01 FF", "40 01 FF", "00 00 FF")
-    fun trunk()      = executeRemote("Trunk",      "02 00 FF")
+    fun lock()       = executeRemote("Lock",        lockSteps())
+    fun unlock()     = executeRemote("Unlock all",  unlockSteps())
+    fun unlockDrv()  = executeRemote("Unlock drv",  unlockDrvSteps())
+    fun preheatOn()  = executeRemote("Preheat ON",  preheatOnSteps())
+    fun preheatOff() = executeRemote("Preheat OFF", preheatOffSteps())
+    fun trunk()      = executeRemote("Trunk",       trunkSteps())
 
-    private fun executeRemote(label: String, vararg payloads: String) {
+    private fun executeRemote(label: String, commandSteps: List<Step>) {
         if (sequenceBusy) {
-            listener.onLog("Busy – wait for current command")
-            return
+            listener.onLog("Busy – wait for current command"); return
         }
         if (!isConnected) {
-            listener.onCommandDone(label, false)
-            return
+            listener.onCommandDone(label, false); return
         }
         sequenceBusy = true
         val wasPoll = pollingActive
         if (wasPoll) stopSocPolling()
 
         listener.onLog("── $label ──")
-        switchToSwcan {
-            wakeSwcanBus {
-                sendVehicleCommand(payloads.toList()) { ok ->
-                    listener.onLog(if (ok) "✓ $label done" else "✗ $label failed")
-                    listener.onCommandDone(label, ok)
-                    sequenceBusy = false
-                    if (wasPoll) {
-                        handler.postDelayed({
-                            setupHsCan { startSocPolling() }
-                        }, 1000L)
-                    }
-                }
+        val fullSequence = wakeSteps() + commandSteps
+        runTimedSteps(fullSequence) { ok ->
+            listener.onLog(if (ok) "✓ $label done" else "✗ $label failed")
+            listener.onCommandDone(label, ok)
+            sequenceBusy = false
+            if (wasPoll) {
+                handler.postDelayed({ setupHsCan { startSocPolling() } }, 1000)
             }
         }
     }
 
-    /** Configure the adapter for SWCAN (33.3 kbps single-wire CAN). */
-    private fun switchToSwcan(then: () -> Unit) {
-        val setup = listOf(
-            "ATZ",
-            "ATE0",
-            "ATH1",
-            "ATAL",
-            "ATS1",
-            "STP 61",
-            "ATCAF0"
-        )
-        runSteps(setup, 200L) { ok ->
-            if (!ok) listener.onLog("⚠ SWCAN setup issue")
-            then()
-        }
-    }
-
     /**
-     * Full SWCAN high-voltage wakeup: switch transceiver to HV wakeup mode,
-     * send wake frames to all known ECU node addresses, then return to normal mode.
-     * Reproduces the OnStar/MyVoltStar wake sequence.
+     * SWCAN HV wake sequence – exact reproduction of the tested nRF macros.
+     *
+     * 1. ATE0              echo off
+     * 2. STP 61            SWCAN 11-bit 33.3 kbps
+     * 3. STPO              open protocol
+     * 4. STCSWM 2          HV wakeup transceiver mode
+     * 5. ATSH100           set header to 0x100
+     * 6. ATRTR             send RTR frame (HV pulse on ID 100)
+     * 7. STCSWM 3          return transceiver to normal mode
+     * 8. ATSH621           set header to 0x621
+     * 9. 00FFFFFFFFFF0000  BCM wake frame (8 bytes)
+     * 10. STP 62           switch to SWCAN 29-bit 33.3 kbps
+     * 11. STPO             open protocol
+     * 12. ATSH1024E097     set extended 29-bit header
      */
-    private fun wakeSwcanBus(then: () -> Unit) {
-        listener.onLog("Waking SWCAN bus …")
-        val wake = mutableListOf<String>()
+    private fun wakeSteps(): List<Step> = listOf(
+        Step("ATE0",               200),
+        Step("STP 61",             150),
+        Step("STPO",               150),
+        Step("STCSWM 2",           30),
+        Step("ATSH100",            50),
+        Step("ATRTR",              20),
+        Step("STCSWM 3",          200),
+        Step("ATSH621",            50),
+        Step("00FFFFFFFFFF0000",  720),
+        Step("STP 62",            150),
+        Step("STPO",              150),
+        Step("ATSH1024E097",       50),
+    )
 
-        wake += "STCSWM 2"                       // HV wakeup mode
+    private fun preheatOnSteps(): List<Step> = listOf(
+        Step("8001FF",   360),
+        Step("0000FF",     0),
+    )
 
-        wake += "ATSH 100"
-        wake += "00 00 00 00 00 00 00 00"         // initial wake pulse
+    private fun preheatOffSteps(): List<Step> = listOf(
+        Step("4001FF",   360),
+        Step("0000FF",     0),
+    )
 
-        for (node in listOf("620", "621", "622")) {
-            wake += "ATSH $node"
-            wake += "00 FF FF FF FF FF 00 00"
-            wake += "01 FF FF FF FF FF 00 00"
-        }
+    private fun unlockSteps(): List<Step> = listOf(
+        Step("0003FF",   180),
+        Step("0C00FF",  1250),
+        Step("0000FF",     0),
+    )
 
-        wake += "ATSH 100"
-        wake += "00 00 00 00 00 00 00 00"         // mid pulse
+    private fun unlockDrvSteps(): List<Step> = listOf(
+        Step("0002FF",   180),
+        Step("0C00FF",  1250),
+        Step("0000FF",     0),
+    )
 
-        for (node in listOf("627", "62C", "62D")) {
-            wake += "ATSH $node"
-            wake += "00 FF FF FF FF FF 00 00"
-            wake += "01 FF FF FF FF FF 00 00"
-        }
+    private fun lockSteps(): List<Step> = listOf(
+        Step("0001FF",   180),
+        Step("0C00FF",  1250),
+        Step("0000FF",     0),
+    )
 
-        wake += "ATSH 100"
-        wake += "00 00 00 00 00 00 00 00"         // final pulse
-
-        wake += "STCSWM 3"                       // back to normal mode
-
-        runSteps(wake, 80L) { _ ->
-            listener.onLog("Wake sequence sent")
-            handler.postDelayed(then, WAKE_DELAY_MS)
-        }
-    }
-
-    /**
-     * Send vehicle command payloads as extended SWCAN frames (29-bit CAN ID 0x1024E097).
-     * ATCP sets the priority nibble (10), ATSH sets the remaining 24 bits (24E097).
-     */
-    private fun sendVehicleCommand(payloads: List<String>, done: (Boolean) -> Unit) {
-        val cmds = mutableListOf<String>()
-        cmds += "ATCP 10"
-        cmds += "ATSH 24 E0 97"
-
-        for ((i, payload) in payloads.withIndex()) {
-            cmds += payload
-            if (i < payloads.size - 1) {
-                // inter-frame gap handled by runSteps delay
-            }
-        }
-
-        runSteps(cmds, 500L, done)
-    }
+    private fun trunkSteps(): List<Step> = listOf(
+        Step("0200FF",     0),
+    )
 
     // ────────────────────── lifecycle ──────────────────────
 

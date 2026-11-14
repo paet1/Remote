@@ -31,26 +31,46 @@ Minimal Android test app for vLinker MC-IOS over BLE.
 
 Init: `ATSP6; ATST96; ATSH7E4`
 
-## Remote Commands (SWCAN, STP 61, 33.3 kbps)
+## Remote Commands (SWCAN)
 
-The wake sequence and vehicle commands reproduce the OnStar/MyVoltStar SWCAN protocol:
+The command sequences are reproduced 1:1 from tested nRF Connect macros.
 
-### SWCAN Wake Sequence
-1. `ATZ`, `ATE0`, `ATH1`, `ATAL`, `ATS1` – adapter setup
-2. `STP 61` – switch to SWCAN 33.3 kbps
-3. `ATCAF0` – CAN auto formatting off
-4. `STCSWM 2` – high-voltage wakeup mode
-5. Send wake frames on headers 100, 620, 621, 622, 627, 62C, 62D
-6. `STCSWM 3` – return to normal mode
+### SWCAN Wake Sequence (tested, exact timings)
 
-### Vehicle Commands (extended 29-bit CAN ID 0x1024E097)
-- `ATCP 10` + `ATSH 24 E0 97` for the extended header
-- Lock: `00 01 FF` → `0C 00 FF` → `00 00 FF`
-- Unlock driver: `00 02 FF` → `0C 00 FF` → `00 00 FF`
-- Unlock all: `00 03 FF` → `0C 00 FF` → `00 00 FF`
-- Open trunk: `02 00 FF`
-- Preheat ON: `00 01 FF` → `80 01 FF` → `00 00 FF`
-- Preheat OFF: `00 01 FF` → `40 01 FF` → `00 00 FF`
+| # | Command | Wait | Description |
+|---|---------|------|-------------|
+| 1 | `ATE0` | 200 ms | Echo off |
+| 2 | `STP 61` | 150 ms | SWCAN 11-bit 33.3 kbps |
+| 3 | `STPO` | 150 ms | Open protocol |
+| 4 | `STCSWM 2` | 30 ms | HV wakeup transceiver mode |
+| 5 | `ATSH100` | 50 ms | Set header 0x100 |
+| 6 | `ATRTR` | 20 ms | Send RTR frame (HV pulse) |
+| 7 | `STCSWM 3` | 200 ms | Return to normal mode |
+| 8 | `ATSH621` | 50 ms | Set header 0x621 |
+| 9 | `00FFFFFFFFFF0000` | 720 ms | BCM wake frame |
+| 10 | `STP 62` | 150 ms | SWCAN 29-bit 33.3 kbps |
+| 11 | `STPO` | 150 ms | Open protocol |
+| 12 | `ATSH1024E097` | 50 ms | Extended 29-bit header |
+
+### Vehicle Commands (on extended CAN ID 0x1024E097)
+
+**Lock:**
+`0001FF` → 180 ms → `0C00FF` → 1250 ms → `0000FF`
+
+**Unlock all doors:**
+`0003FF` → 180 ms → `0C00FF` → 1250 ms → `0000FF`
+
+**Unlock driver door:**
+`0002FF` → 180 ms → `0C00FF` → 1250 ms → `0000FF`
+
+**Open trunk:**
+`0200FF`
+
+**Preheat ON:**
+`8001FF` → 360 ms → `0000FF`
+
+**Preheat OFF:**
+`4001FF` → 360 ms → `0000FF`
 
 ## Build on GitHub from Android phone
 1. Create a new empty GitHub repository.
