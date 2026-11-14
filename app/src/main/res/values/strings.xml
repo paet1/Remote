@@ -2,6 +2,7 @@
 <resources>
     <string name="app_name">Ampera-e Remote</string>
     <string name="connect">Connect</string>
+    <string name="disconnect">Disconnect</string>
     <string name="lock">Lock</string>
     <string name="unlock">Unlock All</string>
     <string name="unlock_drv">Unlock Drv</string>
@@ -13,4 +14,13 @@
     <string name="soc_stop">SOC Stop</string>
     <string name="soc_placeholder">– – %</string>
     <string name="batt_placeholder">Not connected</string>
+    <string name="section_doors">Doors</string>
+    <string name="section_climate">Climate</string>
+    <string name="status_connected">Connected</string>
+    <string name="status_disconnected">Disconnected</string>
+    <string name="stat_temp_label">Battery</string>
+    <string name="stat_voltage_label">HV Voltage</string>
+    <string name="stat_current_label">Charger</string>
+    <string name="stat_capacity_label">Capacity</string>
+    <string name="stat_na">– –</string>
 </resources>

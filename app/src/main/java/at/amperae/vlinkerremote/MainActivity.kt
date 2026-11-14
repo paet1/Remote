@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
 import android.widget.ScrollView
 import android.widget.TextView
@@ -21,8 +22,13 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
 
     private lateinit var ble: VLinkerBle
 
-    private lateinit var tvSoc: TextView
-    private lateinit var tvBattInfo: TextView
+    private lateinit var socRing: SocRingView
+    private lateinit var statusDot: View
+    private lateinit var tvStatus: TextView
+    private lateinit var tvStatTemp: TextView
+    private lateinit var tvStatVolt: TextView
+    private lateinit var tvStatCurrent: TextView
+    private lateinit var tvStatCap: TextView
     private lateinit var btnConnect: Button
     private lateinit var btnSoc: Button
     private lateinit var btnLock: Button
@@ -40,18 +46,23 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        tvSoc       = findViewById(R.id.tvSoc)
-        tvBattInfo  = findViewById(R.id.tvBattInfo)
-        btnConnect  = findViewById(R.id.btnConnect)
-        btnSoc      = findViewById(R.id.btnSoc)
-        btnLock     = findViewById(R.id.btnLock)
-        btnUnlockDrv= findViewById(R.id.btnUnlockDrv)
-        btnUnlock   = findViewById(R.id.btnUnlock)
-        btnHeatOn   = findViewById(R.id.btnHeatOn)
-        btnHeatOff  = findViewById(R.id.btnHeatOff)
-        btnTrunk    = findViewById(R.id.btnTrunk)
-        tvLog       = findViewById(R.id.tvLog)
-        scrollLog   = findViewById(R.id.scrollLog)
+        socRing       = findViewById(R.id.socRing)
+        statusDot     = findViewById(R.id.statusDot)
+        tvStatus      = findViewById(R.id.tvStatus)
+        tvStatTemp    = findViewById(R.id.tvStatTempVal)
+        tvStatVolt    = findViewById(R.id.tvStatVoltVal)
+        tvStatCurrent = findViewById(R.id.tvStatCurrentVal)
+        tvStatCap     = findViewById(R.id.tvStatCapVal)
+        btnConnect    = findViewById(R.id.btnConnect)
+        btnSoc        = findViewById(R.id.btnSoc)
+        btnLock       = findViewById(R.id.btnLock)
+        btnUnlockDrv  = findViewById(R.id.btnUnlockDrv)
+        btnUnlock     = findViewById(R.id.btnUnlock)
+        btnHeatOn     = findViewById(R.id.btnHeatOn)
+        btnHeatOff    = findViewById(R.id.btnHeatOff)
+        btnTrunk      = findViewById(R.id.btnTrunk)
+        tvLog         = findViewById(R.id.tvLog)
+        scrollLog     = findViewById(R.id.scrollLog)
 
         ble = VLinkerBle(this, this)
         setRemoteButtonsEnabled(false)
@@ -102,32 +113,37 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
 
     override fun onConnectionStateChanged(connected: Boolean) {
         runOnUiThread {
-            btnConnect.text = if (connected) "Disconnect" else "Connect"
+            btnConnect.text = getString(if (connected) R.string.disconnect else R.string.connect)
+            tvStatus.text = getString(
+                if (connected) R.string.status_connected else R.string.status_disconnected
+            )
+            statusDot.setBackgroundResource(
+                if (connected) R.drawable.status_dot_on else R.drawable.status_dot_off
+            )
             btnSoc.isEnabled = connected
             setRemoteButtonsEnabled(connected)
             if (!connected) {
                 socPolling = false
                 btnSoc.text = getString(R.string.soc_start)
-                tvSoc.text = getString(R.string.soc_placeholder)
-                tvBattInfo.text = getString(R.string.batt_placeholder)
+                socRing.clear()
+                resetStats()
             }
         }
     }
 
     override fun onSocUpdate(socPercent: Float) {
         runOnUiThread {
-            tvSoc.text = String.format(Locale.US, "%.1f %%", socPercent)
+            socRing.setPercent(socPercent)
         }
     }
 
     override fun onBatteryInfo(tempC: Int?, voltageV: Float?, currentA: Float?, capacityKwh: Float?) {
         runOnUiThread {
-            val parts = mutableListOf<String>()
-            tempC?.let       { parts += "${it} °C" }
-            voltageV?.let    { parts += String.format(Locale.US, "%.0f V", it) }
-            currentA?.let    { parts += String.format(Locale.US, "%.1f A", it) }
-            capacityKwh?.let { parts += String.format(Locale.US, "%.1f kWh", it) }
-            tvBattInfo.text = if (parts.isNotEmpty()) parts.joinToString("  ·  ") else "Polling …"
+            val na = getString(R.string.stat_na)
+            tvStatTemp.text    = tempC?.let { "$it °C" } ?: na
+            tvStatVolt.text    = voltageV?.let { String.format(Locale.US, "%.0f V", it) } ?: na
+            tvStatCurrent.text = currentA?.let { String.format(Locale.US, "%.1f A", it) } ?: na
+            tvStatCap.text     = capacityKwh?.let { String.format(Locale.US, "%.1f kWh", it) } ?: na
         }
     }
 
@@ -144,6 +160,14 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
         btnHeatOn.isEnabled = on
         btnHeatOff.isEnabled = on
         btnTrunk.isEnabled = on
+    }
+
+    private fun resetStats() {
+        val na = getString(R.string.stat_na)
+        tvStatTemp.text = na
+        tvStatVolt.text = na
+        tvStatCurrent.text = na
+        tvStatCap.text = na
     }
 
     private fun confirm(title: String, action: () -> Unit) {
