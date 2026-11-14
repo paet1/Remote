@@ -1,211 +1,424 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
+<ScrollView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@color/background">
+    android:background="@color/background"
+    android:fillViewport="true">
 
-    <!-- Main scrollable content -->
-    <ScrollView
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:fillViewport="true">
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
 
+        <!-- ═══════ Hero Section: SOC Ring ═══════ -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/hero_gradient"
+            android:paddingTop="24dp"
+            android:paddingBottom="16dp"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center_horizontal">
+
+                <!-- Title + Status row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="20dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/app_name"
+                        android:textSize="22sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/textPrimary"/>
+
+                    <View
+                        android:id="@+id/statusDot"
+                        android:layout_width="8dp"
+                        android:layout_height="8dp"
+                        android:background="@drawable/status_dot_off"
+                        android:layout_marginEnd="6dp"/>
+
+                    <TextView
+                        android:id="@+id/tvStatus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/status_disconnected"
+                        android:textSize="13sp"
+                        android:textColor="@color/textTertiary"/>
+                </LinearLayout>
+
+                <!-- SOC Ring -->
+                <at.amperae.vlinkerremote.SocRingView
+                    android:id="@+id/socRing"
+                    android:layout_width="180dp"
+                    android:layout_height="180dp"
+                    android:layout_marginBottom="12dp"/>
+
+                <!-- Range + Status row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:layout_marginBottom="4dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/range_label"
+                        android:textSize="13sp"
+                        android:textColor="@color/textTertiary"
+                        android:layout_marginEnd="4dp"/>
+
+                    <TextView
+                        android:id="@+id/tvRange"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/range_na"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/textPrimary"
+                        android:layout_marginEnd="24dp"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/status_label"
+                        android:textSize="13sp"
+                        android:textColor="@color/textTertiary"
+                        android:layout_marginEnd="4dp"/>
+
+                    <TextView
+                        android:id="@+id/tvConnectionLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/status_disconnected"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/textPrimary"/>
+                </LinearLayout>
+
+                <!-- Battery stats row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:layout_marginTop="8dp">
+
+                    <!-- Temp -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:gravity="center">
+                        <TextView
+                            android:id="@+id/tvStatTempVal"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/stat_na"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/statValue"/>
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/stat_temp_label"
+                            android:textSize="10sp"
+                            android:textColor="@color/statLabel"/>
+                    </LinearLayout>
+
+                    <!-- Voltage -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:gravity="center">
+                        <TextView
+                            android:id="@+id/tvStatVoltVal"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/stat_na"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/statValue"/>
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/stat_voltage_label"
+                            android:textSize="10sp"
+                            android:textColor="@color/statLabel"/>
+                    </LinearLayout>
+
+                    <!-- Current -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:gravity="center">
+                        <TextView
+                            android:id="@+id/tvStatCurrentVal"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/stat_na"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/statValue"/>
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/stat_current_label"
+                            android:textSize="10sp"
+                            android:textColor="@color/statLabel"/>
+                    </LinearLayout>
+
+                    <!-- Capacity -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:gravity="center">
+                        <TextView
+                            android:id="@+id/tvStatCapVal"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/stat_na"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/statValue"/>
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/stat_capacity_label"
+                            android:textSize="10sp"
+                            android:textColor="@color/statLabel"/>
+                    </LinearLayout>
+                </LinearLayout>
+
+            </LinearLayout>
+        </FrameLayout>
+
+        <!-- ═══════ Content below hero ═══════ -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="16dp"
+            android:paddingBottom="16dp">
 
-            <!-- ═══ Header row ═══ -->
+            <!-- Connect + SOC buttons row -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginBottom="12dp">
+                android:layout_marginBottom="16dp">
 
-                <TextView
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnConnect"
                     android:layout_width="0dp"
-                    android:layout_height="wrap_content"
+                    android:layout_height="44dp"
                     android:layout_weight="1"
-                    android:text="@string/app_name"
-                    android:textSize="20sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/textPrimary"/>
-
-                <View
-                    android:id="@+id/statusDot"
-                    android:layout_width="8dp"
-                    android:layout_height="8dp"
-                    android:background="@drawable/status_dot_off"
+                    android:text="@string/connect"
+                    android:textColor="#FF0D1117"
+                    android:textSize="13sp"
+                    app:backgroundTint="@color/btnConnect"
+                    app:cornerRadius="12dp"
                     android:layout_marginEnd="6dp"/>
 
-                <TextView
-                    android:id="@+id/tvStatus"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/status_disconnected"
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSoc"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:text="@string/soc_start"
+                    android:textColor="@color/accent"
                     android:textSize="13sp"
-                    android:textColor="@color/textSecondary"/>
+                    app:strokeColor="@color/accent"
+                    app:cornerRadius="12dp"
+                    android:layout_marginStart="6dp"
+                    android:enabled="false"/>
             </LinearLayout>
 
-            <!-- Connect / Disconnect button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnConnect"
-                android:layout_width="match_parent"
-                android:layout_height="44dp"
-                android:text="@string/connect"
-                android:textColor="@android:color/white"
-                app:backgroundTint="@color/accent"
-                app:cornerRadius="12dp"
+            <!-- ═══ Remote Control heading ═══ -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/section_remote"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@color/textPrimary"
                 android:layout_marginBottom="12dp"/>
 
-            <!-- ═══ Divider ═══ -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="@color/dividerColor"
-                android:layout_marginBottom="14dp"/>
-
-            <!-- ═══ SOC Ring + Battery Stats ═══ -->
+            <!-- Two cards side by side -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:background="@drawable/card_bg"
-                android:padding="16dp"
-                android:layout_marginBottom="8dp">
+                android:layout_marginBottom="12dp">
 
-                <at.amperae.vlinkerremote.SocRingView
-                    android:id="@+id/socRing"
-                    android:layout_width="130dp"
-                    android:layout_height="130dp"/>
-
+                <!-- ── Vorklimatisierung card ── -->
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:orientation="vertical"
-                    android:layout_marginStart="16dp">
+                    android:background="@drawable/card_bg_light"
+                    android:padding="14dp"
+                    android:layout_marginEnd="6dp">
 
-                    <!-- Row 1: Temp + Voltage -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
+                    <TextView
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:layout_marginBottom="12dp">
+                        android:text="@string/section_climate"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/textPrimary"
+                        android:layout_marginBottom="10dp"/>
 
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-                            <TextView
-                                android:id="@+id/tvStatTempVal"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/stat_na"
-                                android:textSize="16sp"
-                                android:textStyle="bold"
-                                android:textColor="@color/statValue"/>
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/stat_temp_label"
-                                android:textSize="11sp"
-                                android:textColor="@color/statLabel"/>
-                        </LinearLayout>
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-                            <TextView
-                                android:id="@+id/tvStatVoltVal"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/stat_na"
-                                android:textSize="16sp"
-                                android:textStyle="bold"
-                                android:textColor="@color/statValue"/>
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/stat_voltage_label"
-                                android:textSize="11sp"
-                                android:textColor="@color/statLabel"/>
-                        </LinearLayout>
-                    </LinearLayout>
-
-                    <!-- Row 2: Current + Capacity -->
-                    <LinearLayout
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnHeatOn"
                         android:layout_width="match_parent"
+                        android:layout_height="38dp"
+                        android:text="@string/preheat_on"
+                        android:textColor="#FF0D1117"
+                        android:textSize="12sp"
+                        app:backgroundTint="@color/btnHeatOn"
+                        app:cornerRadius="10dp"
+                        android:enabled="false"
+                        android:layout_marginBottom="6dp"/>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnHeatOff"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="38dp"
+                        android:text="@string/preheat_off"
+                        android:textColor="@color/textSecondary"
+                        android:textSize="12sp"
+                        app:strokeColor="@color/dividerColor"
+                        app:cornerRadius="10dp"
+                        android:enabled="false"
+                        android:layout_marginBottom="6dp"/>
+
+                    <TextView
+                        android:id="@+id/tvClimateStatus"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal">
+                        android:text="@string/climate_status_off"
+                        android:textSize="11sp"
+                        android:textColor="@color/textTertiary"/>
+                </LinearLayout>
 
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-                            <TextView
-                                android:id="@+id/tvStatCurrentVal"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/stat_na"
-                                android:textSize="16sp"
-                                android:textStyle="bold"
-                                android:textColor="@color/statValue"/>
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/stat_current_label"
-                                android:textSize="11sp"
-                                android:textColor="@color/statLabel"/>
-                        </LinearLayout>
+                <!-- ── Verriegelung card ── -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:background="@drawable/card_bg_light"
+                    android:padding="14dp"
+                    android:layout_marginStart="6dp">
 
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-                            <TextView
-                                android:id="@+id/tvStatCapVal"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/stat_na"
-                                android:textSize="16sp"
-                                android:textStyle="bold"
-                                android:textColor="@color/statValue"/>
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/stat_capacity_label"
-                                android:textSize="11sp"
-                                android:textColor="@color/statLabel"/>
-                        </LinearLayout>
-                    </LinearLayout>
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/section_lock"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/textPrimary"
+                        android:layout_marginBottom="10dp"/>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnLock"
+                        android:layout_width="match_parent"
+                        android:layout_height="38dp"
+                        android:text="@string/lock"
+                        android:textColor="#FF0D1117"
+                        android:textSize="12sp"
+                        app:backgroundTint="@color/btnLock"
+                        app:cornerRadius="10dp"
+                        android:enabled="false"
+                        android:layout_marginBottom="6dp"/>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnUnlockDrv"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="38dp"
+                        android:text="@string/unlock_drv"
+                        android:textColor="@color/btnUnlock"
+                        android:textSize="12sp"
+                        app:strokeColor="@color/btnUnlock"
+                        app:cornerRadius="10dp"
+                        android:enabled="false"
+                        android:layout_marginBottom="6dp"/>
+
+                    <TextView
+                        android:id="@+id/tvLockStatus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/lock_status_unknown"
+                        android:textSize="11sp"
+                        android:textColor="@color/textTertiary"/>
                 </LinearLayout>
             </LinearLayout>
 
-            <!-- SOC polling toggle -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnSoc"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            <!-- Extra controls row: Unlock All + Trunk -->
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="40dp"
-                android:text="@string/soc_start"
-                android:textColor="@color/btnSoc"
-                app:strokeColor="@color/btnSoc"
-                app:cornerRadius="12dp"
-                android:enabled="false"
-                android:layout_marginBottom="14dp"/>
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="16dp">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnUnlock"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="42dp"
+                    android:layout_weight="1"
+                    android:text="@string/unlock"
+                    android:textColor="@color/btnUnlock"
+                    android:textSize="12sp"
+                    app:strokeColor="@color/btnUnlock"
+                    app:cornerRadius="12dp"
+                    android:layout_marginEnd="6dp"
+                    android:enabled="false"/>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnTrunk"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="42dp"
+                    android:layout_weight="1"
+                    android:text="@string/trunk"
+                    android:textColor="@color/btnTrunk"
+                    android:textSize="12sp"
+                    app:strokeColor="@color/btnTrunk"
+                    app:cornerRadius="12dp"
+                    android:layout_marginStart="6dp"
+                    android:enabled="false"/>
+            </LinearLayout>
 
             <!-- ═══ Divider ═══ -->
             <View
@@ -213,127 +426,6 @@
                 android:layout_height="1dp"
                 android:background="@color/dividerColor"
                 android:layout_marginBottom="12dp"/>
-
-            <!-- ═══ Doors section ═══ -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/section_doors"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                android:textColor="@color/sectionLabel"
-                android:layout_marginBottom="8dp"/>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginBottom="12dp">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnLock"
-                    android:layout_width="0dp"
-                    android:layout_height="48dp"
-                    android:layout_weight="1"
-                    android:text="@string/lock"
-                    android:textColor="@android:color/white"
-                    android:textSize="11sp"
-                    app:backgroundTint="@color/btnLock"
-                    app:cornerRadius="12dp"
-                    android:layout_marginEnd="4dp"
-                    android:enabled="false"/>
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnUnlockDrv"
-                    android:layout_width="0dp"
-                    android:layout_height="48dp"
-                    android:layout_weight="1"
-                    android:text="@string/unlock_drv"
-                    android:textColor="@android:color/white"
-                    android:textSize="11sp"
-                    app:backgroundTint="@color/btnUnlock"
-                    app:cornerRadius="12dp"
-                    android:layout_marginStart="2dp"
-                    android:layout_marginEnd="2dp"
-                    android:enabled="false"/>
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnUnlock"
-                    android:layout_width="0dp"
-                    android:layout_height="48dp"
-                    android:layout_weight="1"
-                    android:text="@string/unlock"
-                    android:textColor="@android:color/white"
-                    android:textSize="11sp"
-                    app:backgroundTint="@color/btnUnlock"
-                    app:cornerRadius="12dp"
-                    android:layout_marginStart="2dp"
-                    android:layout_marginEnd="2dp"
-                    android:enabled="false"/>
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnTrunk"
-                    android:layout_width="0dp"
-                    android:layout_height="48dp"
-                    android:layout_weight="1"
-                    android:text="@string/trunk"
-                    android:textColor="@android:color/white"
-                    android:textSize="11sp"
-                    app:backgroundTint="@color/btnTrunk"
-                    app:cornerRadius="12dp"
-                    android:layout_marginStart="4dp"
-                    android:enabled="false"/>
-            </LinearLayout>
-
-            <!-- ═══ Climate section ═══ -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/section_climate"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                android:textColor="@color/sectionLabel"
-                android:layout_marginBottom="8dp"/>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginBottom="14dp">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnHeatOn"
-                    android:layout_width="0dp"
-                    android:layout_height="48dp"
-                    android:layout_weight="1"
-                    android:text="@string/preheat_on"
-                    android:textColor="@android:color/white"
-                    android:textSize="12sp"
-                    app:backgroundTint="@color/btnHeatOn"
-                    app:cornerRadius="12dp"
-                    android:layout_marginEnd="4dp"
-                    android:enabled="false"/>
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnHeatOff"
-                    android:layout_width="0dp"
-                    android:layout_height="48dp"
-                    android:layout_weight="1"
-                    android:text="@string/preheat_off"
-                    android:textColor="@android:color/white"
-                    android:textSize="12sp"
-                    app:backgroundTint="@color/btnHeatOff"
-                    app:cornerRadius="12dp"
-                    android:layout_marginStart="4dp"
-                    android:enabled="false"/>
-            </LinearLayout>
-
-            <!-- ═══ Divider ═══ -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="@color/dividerColor"
-                android:layout_marginBottom="8dp"/>
 
             <!-- ═══ BLE Log ═══ -->
             <TextView
@@ -342,15 +434,15 @@
                 android:text="@string/log_label"
                 android:textSize="13sp"
                 android:textStyle="bold"
-                android:textColor="@color/sectionLabel"
-                android:layout_marginBottom="4dp"/>
+                android:textColor="@color/textTertiary"
+                android:layout_marginBottom="6dp"/>
 
             <ScrollView
                 android:id="@+id/scrollLog"
                 android:layout_width="match_parent"
-                android:layout_height="120dp"
-                android:background="@color/logBackground"
-                android:padding="8dp"
+                android:layout_height="130dp"
+                android:background="@drawable/card_bg"
+                android:padding="10dp"
                 android:fadeScrollbars="false">
 
                 <TextView
@@ -364,6 +456,5 @@
             </ScrollView>
 
         </LinearLayout>
-    </ScrollView>
-
-</LinearLayout>
+    </LinearLayout>
+</ScrollView>

@@ -18,6 +18,7 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
 
     companion object {
         private const val PERM_REQ = 1
+        private const val WLTP_RANGE_KM = 380f
     }
 
     private lateinit var ble: VLinkerBle
@@ -25,10 +26,14 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
     private lateinit var socRing: SocRingView
     private lateinit var statusDot: View
     private lateinit var tvStatus: TextView
+    private lateinit var tvConnectionLabel: TextView
+    private lateinit var tvRange: TextView
     private lateinit var tvStatTemp: TextView
     private lateinit var tvStatVolt: TextView
     private lateinit var tvStatCurrent: TextView
     private lateinit var tvStatCap: TextView
+    private lateinit var tvClimateStatus: TextView
+    private lateinit var tvLockStatus: TextView
     private lateinit var btnConnect: Button
     private lateinit var btnSoc: Button
     private lateinit var btnLock: Button
@@ -46,23 +51,27 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        socRing       = findViewById(R.id.socRing)
-        statusDot     = findViewById(R.id.statusDot)
-        tvStatus      = findViewById(R.id.tvStatus)
-        tvStatTemp    = findViewById(R.id.tvStatTempVal)
-        tvStatVolt    = findViewById(R.id.tvStatVoltVal)
-        tvStatCurrent = findViewById(R.id.tvStatCurrentVal)
-        tvStatCap     = findViewById(R.id.tvStatCapVal)
-        btnConnect    = findViewById(R.id.btnConnect)
-        btnSoc        = findViewById(R.id.btnSoc)
-        btnLock       = findViewById(R.id.btnLock)
-        btnUnlockDrv  = findViewById(R.id.btnUnlockDrv)
-        btnUnlock     = findViewById(R.id.btnUnlock)
-        btnHeatOn     = findViewById(R.id.btnHeatOn)
-        btnHeatOff    = findViewById(R.id.btnHeatOff)
-        btnTrunk      = findViewById(R.id.btnTrunk)
-        tvLog         = findViewById(R.id.tvLog)
-        scrollLog     = findViewById(R.id.scrollLog)
+        socRing          = findViewById(R.id.socRing)
+        statusDot        = findViewById(R.id.statusDot)
+        tvStatus         = findViewById(R.id.tvStatus)
+        tvConnectionLabel = findViewById(R.id.tvConnectionLabel)
+        tvRange          = findViewById(R.id.tvRange)
+        tvStatTemp       = findViewById(R.id.tvStatTempVal)
+        tvStatVolt       = findViewById(R.id.tvStatVoltVal)
+        tvStatCurrent    = findViewById(R.id.tvStatCurrentVal)
+        tvStatCap        = findViewById(R.id.tvStatCapVal)
+        tvClimateStatus  = findViewById(R.id.tvClimateStatus)
+        tvLockStatus     = findViewById(R.id.tvLockStatus)
+        btnConnect       = findViewById(R.id.btnConnect)
+        btnSoc           = findViewById(R.id.btnSoc)
+        btnLock          = findViewById(R.id.btnLock)
+        btnUnlockDrv     = findViewById(R.id.btnUnlockDrv)
+        btnUnlock        = findViewById(R.id.btnUnlock)
+        btnHeatOn        = findViewById(R.id.btnHeatOn)
+        btnHeatOff       = findViewById(R.id.btnHeatOff)
+        btnTrunk         = findViewById(R.id.btnTrunk)
+        tvLog            = findViewById(R.id.tvLog)
+        scrollLog        = findViewById(R.id.scrollLog)
 
         ble = VLinkerBle(this, this)
         setRemoteButtonsEnabled(false)
@@ -89,12 +98,24 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
             }
         }
 
-        btnLock.setOnClickListener      { confirm("Lock vehicle?")       { ble.lock() } }
-        btnUnlockDrv.setOnClickListener  { confirm("Unlock driver door?") { ble.unlockDrv() } }
-        btnUnlock.setOnClickListener     { confirm("Unlock all doors?")   { ble.unlock() } }
-        btnHeatOn.setOnClickListener     { confirm("Preheat ON?")         { ble.preheatOn() } }
-        btnHeatOff.setOnClickListener    { confirm("Preheat OFF?")        { ble.preheatOff() } }
-        btnTrunk.setOnClickListener      { confirm("Open trunk?")         { ble.trunk() } }
+        btnLock.setOnClickListener {
+            confirm(getString(R.string.confirm_title_lock)) { ble.lock() }
+        }
+        btnUnlockDrv.setOnClickListener {
+            confirm(getString(R.string.confirm_title_unlock_drv)) { ble.unlockDrv() }
+        }
+        btnUnlock.setOnClickListener {
+            confirm(getString(R.string.confirm_title_unlock)) { ble.unlock() }
+        }
+        btnHeatOn.setOnClickListener {
+            confirm(getString(R.string.confirm_title_heat_on)) { ble.preheatOn() }
+        }
+        btnHeatOff.setOnClickListener {
+            confirm(getString(R.string.confirm_title_heat_off)) { ble.preheatOff() }
+        }
+        btnTrunk.setOnClickListener {
+            confirm(getString(R.string.confirm_title_trunk)) { ble.trunk() }
+        }
     }
 
     override fun onDestroy() {
@@ -113,10 +134,12 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
 
     override fun onConnectionStateChanged(connected: Boolean) {
         runOnUiThread {
-            btnConnect.text = getString(if (connected) R.string.disconnect else R.string.connect)
-            tvStatus.text = getString(
+            val connStr = getString(
                 if (connected) R.string.status_connected else R.string.status_disconnected
             )
+            btnConnect.text = getString(if (connected) R.string.disconnect else R.string.connect)
+            tvStatus.text = connStr
+            tvConnectionLabel.text = connStr
             statusDot.setBackgroundResource(
                 if (connected) R.drawable.status_dot_on else R.drawable.status_dot_off
             )
@@ -126,6 +149,9 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
                 socPolling = false
                 btnSoc.text = getString(R.string.soc_start)
                 socRing.clear()
+                tvRange.text = getString(R.string.range_na)
+                tvClimateStatus.text = getString(R.string.climate_status_off)
+                tvLockStatus.text = getString(R.string.lock_status_unknown)
                 resetStats()
             }
         }
@@ -134,6 +160,8 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
     override fun onSocUpdate(socPercent: Float) {
         runOnUiThread {
             socRing.setPercent(socPercent)
+            val rangeKm = (socPercent / 100f * WLTP_RANGE_KM).toInt()
+            tvRange.text = "$rangeKm km"
         }
     }
 
@@ -148,7 +176,17 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
     }
 
     override fun onCommandDone(command: String, success: Boolean) {
-        runOnUiThread { setRemoteButtonsEnabled(ble.isConnected) }
+        runOnUiThread {
+            setRemoteButtonsEnabled(ble.isConnected)
+            if (success) when (command) {
+                "Lock" ->
+                    tvLockStatus.text = getString(R.string.lock_status_locked)
+                "Preheat ON" ->
+                    tvClimateStatus.text = getString(R.string.climate_status_on)
+                "Preheat OFF" ->
+                    tvClimateStatus.text = getString(R.string.climate_status_off)
+            }
+        }
     }
 
     // ── helpers ──
@@ -174,9 +212,11 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
         setRemoteButtonsEnabled(false)
         AlertDialog.Builder(this)
             .setTitle(title)
-            .setMessage("Send command to vehicle?")
-            .setPositiveButton("Yes") { _, _ -> action() }
-            .setNegativeButton("Cancel") { _, _ -> setRemoteButtonsEnabled(ble.isConnected) }
+            .setMessage(getString(R.string.confirm_message))
+            .setPositiveButton(getString(R.string.confirm_yes)) { _, _ -> action() }
+            .setNegativeButton(getString(R.string.confirm_no)) { _, _ ->
+                setRemoteButtonsEnabled(ble.isConnected)
+            }
             .setCancelable(false)
             .show()
     }
@@ -211,7 +251,7 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
         if (requestCode == PERM_REQ && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
             pendingAction?.invoke()
         } else {
-            onLog("Permissions denied")
+            onLog("Berechtigungen verweigert")
         }
         pendingAction = null
     }
