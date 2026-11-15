@@ -316,6 +316,9 @@ class VLinkerBle(
     //  LIVE SOC  –  via HS-CAN (protocol 6, 500 kbps)
     // ═══════════════════════════════════════════════════════════════
 
+    private var hsCanReady = false
+    private var triedAutoDetect = false
+
     fun startSocPolling() {
         if (!adapterReady) {
             listener.onLog("⚠ Adapter not ready – wait for init")
@@ -324,8 +327,10 @@ class VLinkerBle(
         if (pollingActive) return
         pollingActive = true
         noDataCount = 0
+        hsCanReady = false
+        triedAutoDetect = false
         listener.onLog("Starting SOC polling …")
-        setupHsCan { wakeEcuThenPoll() }
+        setupHsCan { attemptSocRead() }
     }
 
     fun stopSocPolling() {
@@ -337,29 +342,106 @@ class VLinkerBle(
 
     private fun setupHsCan(then: () -> Unit) {
         runTimedSteps(listOf(
-            Step("ATSP6",      250),
-            Step("STPO",       200),
-            Step("ATST96",     200),
-            Step("ATAL",       150),
-            Step("ATH1",       150),
-            Step("ATS1",       150),
-            Step("ATSH7E4",    150),
-            Step("ATCRA7EC",   150),
-            Step("ATFCSH7E4",  150),
-            Step("ATFCSD300000",150),
-            Step("ATFCSM1",    150),
+            Step("ATSP6",    300),   // CAN 500k 11-bit
+            Step("ATST96",   200),   // timeout ~600ms
+            Step("ATAL",     150),   // allow long messages
+            Step("ATH1",     150),   // headers on
+            Step("ATS1",     150),   // spaces on
+            Step("ATSH7E4",  150),   // TX to battery ECU
         )) { ok ->
             if (!ok) listener.onLog("⚠ HS-CAN setup incomplete")
-            then()
+            // Verify protocol
+            send("ATDP") { resp ->
+                listener.onLog("Protocol: ${lastLine(resp)}")
+                hsCanReady = true
+                then()
+            }
         }
     }
 
-    private fun wakeEcuThenPoll() {
+    private fun attemptSocRead() {
         if (!pollingActive || !isConnected) return
-        send("3E") { resp ->
+
+        // Try extended diagnostic session first
+        listener.onLog("Opening diagnostic session …")
+        send("1003") { resp ->
             val line = lastLine(resp)
-            if (line.isNotBlank()) listener.onLog("← wake: $line")
-            handler.postDelayed({ schedulePoll() }, 300)
+            listener.onLog("← diag: $line")
+
+            handler.postDelayed({
+                if (!pollingActive) return@postDelayed
+                // Try SOC query
+                send("228334") { socResp ->
+                    val parsed = parseSocResponse(socResp)
+                    if (parsed) {
+                        noDataCount = 0
+                        if (pollingActive) pollBatteryInfo()
+                        return@send
+                    }
+
+                    // NO DATA – try fallback strategies
+                    noDataCount++
+                    if (noDataCount <= 2) {
+                        listener.onLog("Retry ${noDataCount}/2 …")
+                        handler.postDelayed({ attemptSocRead() }, 2500)
+                        return@send
+                    }
+
+                    if (!triedAutoDetect) {
+                        triedAutoDetect = true
+                        listener.onLog("Trying auto-detect protocol …")
+                        tryAutoDetect()
+                        return@send
+                    }
+
+                    listener.onLog("⚠ ECU antwortet nicht")
+                    listener.onLog("Bitte prüfen:")
+                    listener.onLog("  • Zündung eingeschaltet?")
+                    listener.onLog("  • vLinker am OBD-Port?")
+                    listener.onLog("  • Fahrzeug lädt?")
+                    if (pollingActive) {
+                        listener.onLog("Neuer Versuch in 10s …")
+                        noDataCount = 0
+                        triedAutoDetect = false
+                        val r = Runnable {
+                            if (pollingActive) {
+                                setupHsCan { attemptSocRead() }
+                            }
+                        }
+                        pollRunnable = r
+                        handler.postDelayed(r, 10_000)
+                    }
+                }
+            }, 300)
+        }
+    }
+
+    private fun tryAutoDetect() {
+        listener.onLog("── Auto-detect ──")
+        runTimedSteps(listOf(
+            Step("ATSP0",    500),   // auto-detect protocol
+            Step("ATSH7E4",  200),   // TX header
+            Step("ATH1",     150),   // headers on
+        )) { _ ->
+            send("ATDP") { resp ->
+                listener.onLog("Detected: ${lastLine(resp)}")
+                // Try extended session + SOC
+                send("1003") { _ ->
+                    handler.postDelayed({
+                        send("228334") { socResp ->
+                            val parsed = parseSocResponse(socResp)
+                            if (parsed) {
+                                noDataCount = 0
+                                listener.onLog("✓ Auto-detect successful")
+                                if (pollingActive) pollBatteryInfo()
+                            } else {
+                                noDataCount = 3
+                                attemptSocRead()
+                            }
+                        }
+                    }, 300)
+                }
+            }
         }
     }
 
@@ -373,12 +455,13 @@ class VLinkerBle(
             val parsed = parseSocResponse(resp)
             if (!parsed && pollingActive) {
                 noDataCount++
-                if (noDataCount <= 3) {
-                    listener.onLog("Retry ${noDataCount}/3 …")
-                    handler.postDelayed({ schedulePoll() }, 2000)
+                if (noDataCount >= 5) {
+                    listener.onLog("⚠ ECU lost – re-setup …")
+                    noDataCount = 0
+                    triedAutoDetect = false
+                    setupHsCan { attemptSocRead() }
                     return@send
                 }
-                listener.onLog("⚠ ECU antwortet nicht – Zündung an?")
             }
             if (parsed) noDataCount = 0
             if (pollingActive) pollBatteryInfo()
