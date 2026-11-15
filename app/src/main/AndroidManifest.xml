@@ -12,7 +12,7 @@
 
     <application
         android:allowBackup="true"
-        android:label="Ampera-e Remote"
+        android:label="@string/app_name"
         android:theme="@style/AppTheme">
         <activity
             android:name=".MainActivity"

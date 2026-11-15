@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="background">#FF0D1117</color>
+    <color name="heroBackground">#FF0D1117</color>
+    <color name="cardBg">#FF1A2332</color>
+    <color name="cardBgLight">#FF1E2A3A</color>
+    <color name="textPrimary">#FFFFFFFF</color>
+    <color name="textSecondary">#CCFFFFFF</color>
+    <color name="textTertiary">#88FFFFFF</color>
+
+    <color name="accent">#FF4FC3F7</color>
+    <color name="accentDark">#FF039BE5</color>
+    <color name="btnConnect">#FF4FC3F7</color>
+    <color name="btnSoc">#FF4FC3F7</color>
+
+    <color name="btnHeatOn">#FF4FC3F7</color>
+    <color name="btnHeatOff">#FF546E7A</color>
+    <color name="btnLock">#FF4FC3F7</color>
+    <color name="btnUnlock">#FFFF9800</color>
+    <color name="btnTrunk">#FF5C6BC0</color>
+
+    <color name="logBackground">#FF0A0F14</color>
+    <color name="logText">#FF4FC3F7</color>
+
+    <color name="dividerColor">#FF1E2A3A</color>
+    <color name="statusGreen">#FF4FC3F7</color>
+    <color name="statusOff">#FF444444</color>
+    <color name="sectionLabel">#CCFFFFFF</color>
+    <color name="statValue">#FFFFFFFF</color>
+    <color name="statLabel">#88FFFFFF</color>
+
+    <color name="colorPrimary">#FF039BE5</color>
+    <color name="colorPrimaryDark">#FF0D1117</color>
+    <color name="colorAccent">#FF4FC3F7</color>
+</resources>

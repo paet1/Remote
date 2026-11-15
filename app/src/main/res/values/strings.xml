@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Meine Ampera-e</string>
+    <string name="connect">Verbinden</string>
+    <string name="disconnect">Trennen</string>
+    <string name="status_connected">Verbunden</string>
+    <string name="status_disconnected">Getrennt</string>
+
+    <string name="section_remote">Remote Control</string>
+    <string name="section_climate">Vorklimatisierung</string>
+    <string name="section_lock">Verriegelung</string>
+
+    <string name="preheat_on">Aktivieren</string>
+    <string name="preheat_off">Deaktivieren</string>
+    <string name="lock">Verriegeln</string>
+    <string name="unlock">Alle öffnen</string>
+    <string name="unlock_drv">Fahrertür</string>
+    <string name="trunk">Kofferraum</string>
+
+    <string name="lock_status_locked">Fahrzeug: Verriegelt</string>
+    <string name="lock_status_unknown">Fahrzeug: – –</string>
+    <string name="climate_status_off">Status: Aus</string>
+    <string name="climate_status_on">Status: Aktiv</string>
+
+    <string name="log_label">BLE Log</string>
+    <string name="soc_start">SOC Starten</string>
+    <string name="soc_stop">SOC Stoppen</string>
+
+    <string name="range_label">Restreichweite:</string>
+    <string name="range_na">– – km</string>
+    <string name="status_label">Status:</string>
+
+    <string name="stat_temp_label">Temperatur</string>
+    <string name="stat_voltage_label">HV Spannung</string>
+    <string name="stat_current_label">Ladestrom</string>
+    <string name="stat_capacity_label">Kapazität</string>
+    <string name="stat_na">– –</string>
+
+    <string name="confirm_title_lock">Fahrzeug verriegeln?</string>
+    <string name="confirm_title_unlock_drv">Fahrertür entriegeln?</string>
+    <string name="confirm_title_unlock">Alle Türen entriegeln?</string>
+    <string name="confirm_title_heat_on">Vorklimatisierung starten?</string>
+    <string name="confirm_title_heat_off">Vorklimatisierung stoppen?</string>
+    <string name="confirm_title_trunk">Kofferraum öffnen?</string>
+    <string name="confirm_message">Befehl an Fahrzeug senden?</string>
+    <string name="confirm_yes">Ja</string>
+    <string name="confirm_no">Abbrechen</string>
+</resources>
