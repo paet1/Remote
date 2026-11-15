@@ -147,9 +147,9 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
             statusDot.setBackgroundResource(
                 if (connected) R.drawable.status_dot_on else R.drawable.status_dot_off
             )
-            btnSoc.isEnabled = connected
-            setRemoteButtonsEnabled(connected)
             if (!connected) {
+                btnSoc.isEnabled = false
+                setRemoteButtonsEnabled(false)
                 socPolling = false
                 btnSoc.text = getString(R.string.soc_start)
                 socRing.clear()
@@ -158,6 +158,13 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
                 tvLockStatus.text = getString(R.string.lock_status_unknown)
                 resetStats()
             }
+        }
+    }
+
+    override fun onAdapterReady(ready: Boolean) {
+        runOnUiThread {
+            btnSoc.isEnabled = ready && ble.isConnected
+            setRemoteButtonsEnabled(ready && ble.isConnected)
         }
     }
 

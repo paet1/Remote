@@ -9,16 +9,6 @@ import android.os.Looper
 import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
 
-/**
- * BLE transport for vLinker MC-IOS (ELM327/STN-compatible).
- *
- * Command sequences are reproduced byte-for-byte from tested nRF Connect macros
- * that have been proven to work on a real Ampera-e / Bolt EV.
- *
- * Two buses:
- *  - HS-CAN (STP 6 / protocol 6, 500 kbps) → OBD-II diagnostic polls (SOC, temps …)
- *  - SWCAN  (STP 61/62, 33.3 kbps)          → vehicle remote commands
- */
 @SuppressLint("MissingPermission")
 class VLinkerBle(
     private val context: Context,
@@ -28,6 +18,7 @@ class VLinkerBle(
     interface Listener {
         fun onLog(message: String)
         fun onConnectionStateChanged(connected: Boolean)
+        fun onAdapterReady(ready: Boolean)
         fun onSocUpdate(socPercent: Float)
         fun onBatteryInfo(tempC: Int?, voltageV: Float?, currentA: Float?, capacityKwh: Float?)
         fun onCommandDone(command: String, success: Boolean)
@@ -41,9 +32,12 @@ class VLinkerBle(
         val TX_CHAR_UUID: UUID   = UUID.fromString("00002af1-0000-1000-8000-00805f9b34fb")
         val CCC_DESCRIPTOR: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
-        private const val SCAN_TIMEOUT_MS = 15_000L
-        private const val CMD_TIMEOUT_MS  = 4_000L
-        private const val POLL_INTERVAL_MS = 5_000L
+        private const val SCAN_TIMEOUT_MS   = 15_000L
+        private const val CMD_TIMEOUT_MS    = 4_000L
+        private const val INIT_CMD_TIMEOUT  = 6_000L
+        private const val POLL_INTERVAL_MS  = 5_000L
+        private const val LATE_RESP_WAIT_MS = 800L
+        private const val BLE_SETTLE_MS     = 600L
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -56,25 +50,28 @@ class VLinkerBle(
     private var rxChar: BluetoothGattCharacteristic? = null
 
     val isConnected: Boolean get() = gatt != null && txChar != null
+    @Volatile var adapterReady = false; private set
 
     private val rxBuffer = StringBuilder()
     private var pendingCallback: ((String) -> Unit)? = null
     private var timeoutRunnable: Runnable? = null
+    @Volatile private var discardingLate = false
+    private var discardRunnable: Runnable? = null
 
     private val cmdQueue = ConcurrentLinkedQueue<Pair<String, (String) -> Unit>>()
     @Volatile private var cmdBusy = false
     @Volatile private var sequenceBusy = false
+    private var useInitTimeout = false
 
     private var pollingActive = false
     private var pollRunnable: Runnable? = null
+    private var noDataCount = 0
 
     // ────────────────────────────── BLE scan ──────────────────────────────
 
     fun scanAndConnect() {
         val s = adapter?.bluetoothLeScanner
-        if (s == null) {
-            listener.onLog("BLE scanner not available"); return
-        }
+        if (s == null) { listener.onLog("BLE scanner not available"); return }
         scanner = s
         listener.onLog("Scanning for $DEVICE_NAME …")
 
@@ -149,7 +146,7 @@ class VLinkerBle(
             handler.post {
                 listener.onLog("BLE ready")
                 listener.onConnectionStateChanged(true)
-                initAdapter()
+                handler.postDelayed({ initAdapter() }, BLE_SETTLE_MS)
             }
         }
 
@@ -184,11 +181,28 @@ class VLinkerBle(
     // ────────────────────── response accumulation ──────────────────────
 
     private fun onFragment(fragment: String) {
+        if (discardingLate) {
+            rxBuffer.append(fragment)
+            if (rxBuffer.contains('>')) {
+                val late = rxBuffer.toString().substringBefore('>').trim()
+                if (late.isNotBlank()) listener.onLog("← (late) ${lastLine(late)}")
+                rxBuffer.clear()
+                discardingLate = false
+                discardRunnable?.let { handler.removeCallbacks(it) }
+                discardRunnable = null
+                cmdBusy = false
+                drainQueue()
+            }
+            return
+        }
+
         rxBuffer.append(fragment)
         if (rxBuffer.contains('>')) {
             val response = rxBuffer.toString().substringBefore('>').trim()
             rxBuffer.clear()
-            completeCurrentCommand(response)
+            if (pendingCallback != null) {
+                completeCurrentCommand(response)
+            }
         }
     }
 
@@ -202,6 +216,25 @@ class VLinkerBle(
         drainQueue()
     }
 
+    private fun onTimeout(cmd: String) {
+        listener.onLog("⏱ Timeout: $cmd")
+        timeoutRunnable = null
+        val cb = pendingCallback
+        pendingCallback = null
+        cb?.invoke("TIMEOUT")
+
+        discardingLate = true
+        rxBuffer.clear()
+        val r = Runnable {
+            discardingLate = false
+            rxBuffer.clear()
+            cmdBusy = false
+            drainQueue()
+        }
+        discardRunnable = r
+        handler.postDelayed(r, LATE_RESP_WAIT_MS)
+    }
+
     // ──────────────────────── command queue ────────────────────────
 
     private fun enqueue(cmd: String, callback: (String) -> Unit) {
@@ -210,7 +243,7 @@ class VLinkerBle(
     }
 
     private fun drainQueue() {
-        if (cmdBusy) return
+        if (cmdBusy || discardingLate) return
         val pair = cmdQueue.poll() ?: return
         cmdBusy = true
         val (cmd, cb) = pair
@@ -218,12 +251,10 @@ class VLinkerBle(
         rxBuffer.clear()
         sendRaw(cmd)
 
-        val timeout = Runnable {
-            listener.onLog("⏱ Timeout: $cmd")
-            completeCurrentCommand("TIMEOUT")
-        }
-        timeoutRunnable = timeout
-        handler.postDelayed(timeout, CMD_TIMEOUT_MS)
+        val timeout = CMD_TIMEOUT_MS.let { if (useInitTimeout) INIT_CMD_TIMEOUT else it }
+        val r = Runnable { onTimeout(cmd) }
+        timeoutRunnable = r
+        handler.postDelayed(r, timeout)
     }
 
     private fun sendRaw(cmd: String) {
@@ -248,7 +279,7 @@ class VLinkerBle(
         val step = steps.first()
         val rest = steps.drop(1)
         send(step.cmd) { resp ->
-            val line = resp.lines().lastOrNull()?.trim() ?: resp.trim()
+            val line = lastLine(resp)
             if (line.isNotBlank()) listener.onLog("← $line")
             if (line == "?") {
                 listener.onLog("⚠ Command not supported: ${step.cmd}")
@@ -259,17 +290,25 @@ class VLinkerBle(
         }
     }
 
+    private fun lastLine(resp: String): String =
+        resp.lines().lastOrNull { it.isNotBlank() }?.trim() ?: resp.trim()
+
     // ────────────────────── adapter initialisation ──────────────────────
 
     private fun initAdapter() {
+        adapterReady = false
         listener.onLog("Initialising adapter …")
+        useInitTimeout = true
         runTimedSteps(listOf(
-            Step("ATE0",  300),
-            Step("ATL0",  150),
-            Step("ATS1",  150),
-            Step("ATH1",  150),
+            Step("ATE0",  400),
+            Step("ATL0",  200),
+            Step("ATS1",  200),
+            Step("ATH1",  200),
         )) { ok ->
-            listener.onLog(if (ok) "Adapter ready" else "⚠ Init incomplete")
+            useInitTimeout = false
+            adapterReady = ok
+            listener.onLog(if (ok) "Adapter ready ✓" else "⚠ Init incomplete")
+            listener.onAdapterReady(ok)
         }
     }
 
@@ -278,10 +317,15 @@ class VLinkerBle(
     // ═══════════════════════════════════════════════════════════════
 
     fun startSocPolling() {
+        if (!adapterReady) {
+            listener.onLog("⚠ Adapter not ready – wait for init")
+            return
+        }
         if (pollingActive) return
         pollingActive = true
+        noDataCount = 0
         listener.onLog("Starting SOC polling …")
-        setupHsCan { schedulePoll() }
+        setupHsCan { wakeEcuThenPoll() }
     }
 
     fun stopSocPolling() {
@@ -293,20 +337,29 @@ class VLinkerBle(
 
     private fun setupHsCan(then: () -> Unit) {
         runTimedSteps(listOf(
-            Step("ATSP6",     250),   // ISO 15765-4 CAN 500 kbps 11-bit
-            Step("STPO",      200),   // open protocol (needed on STN chips)
-            Step("ATST96",    200),   // timeout ~600 ms
-            Step("ATAL",      150),   // allow long messages
-            Step("ATH1",      150),   // headers on for reliable parsing
-            Step("ATS1",      150),   // spaces on
-            Step("ATSH7E4",   150),   // set TX header to battery ECU
-            Step("ATCRA7EC",  150),   // filter RX to battery ECU response only
-            Step("ATFCSH7E4", 150),   // flow control source header
-            Step("ATFCSD300000",150), // flow control data
-            Step("ATFCSM1",   150),   // flow control mode: user defined
+            Step("ATSP6",      250),
+            Step("STPO",       200),
+            Step("ATST96",     200),
+            Step("ATAL",       150),
+            Step("ATH1",       150),
+            Step("ATS1",       150),
+            Step("ATSH7E4",    150),
+            Step("ATCRA7EC",   150),
+            Step("ATFCSH7E4",  150),
+            Step("ATFCSD300000",150),
+            Step("ATFCSM1",    150),
         )) { ok ->
             if (!ok) listener.onLog("⚠ HS-CAN setup incomplete")
             then()
+        }
+    }
+
+    private fun wakeEcuThenPoll() {
+        if (!pollingActive || !isConnected) return
+        send("3E") { resp ->
+            val line = lastLine(resp)
+            if (line.isNotBlank()) listener.onLog("← wake: $line")
+            handler.postDelayed({ schedulePoll() }, 300)
         }
     }
 
@@ -317,17 +370,24 @@ class VLinkerBle(
 
     private fun pollSoc() {
         send("228334") { resp ->
-            parseSocResponse(resp)
+            val parsed = parseSocResponse(resp)
+            if (!parsed && pollingActive) {
+                noDataCount++
+                if (noDataCount <= 3) {
+                    listener.onLog("Retry ${noDataCount}/3 …")
+                    handler.postDelayed({ schedulePoll() }, 2000)
+                    return@send
+                }
+                listener.onLog("⚠ ECU antwortet nicht – Zündung an?")
+            }
+            if (parsed) noDataCount = 0
             if (pollingActive) pollBatteryInfo()
         }
     }
 
-    private fun parseSocResponse(resp: String) {
+    private fun parseSocResponse(resp: String): Boolean {
         val parts = resp.replace("\r", " ").replace("\n", " ").trim()
             .split("\\s+".toRegex())
-        // With ATH1, response is like: 7EC 04 62 83 34 A5
-        // Without headers:             62 83 34 A5
-        // Find the service response byte "62" followed by PID "83 34"
         val idx = parts.indexOfFirst { it.equals("62", true) }
         if (idx >= 0 && idx + 3 < parts.size
             && parts[idx + 1].equals("83", true)
@@ -337,7 +397,7 @@ class VLinkerBle(
                 val soc = b * 100f / 255f
                 listener.onLog("SOC: %.1f%%".format(soc))
                 listener.onSocUpdate(soc)
-                return
+                return true
             }
         }
         val cleaned = resp.trim()
@@ -348,6 +408,7 @@ class VLinkerBle(
         } else if (cleaned.isNotBlank()) {
             listener.onLog("SOC raw: $cleaned")
         }
+        return false
     }
 
     private fun pollBatteryInfo() {
@@ -399,11 +460,6 @@ class VLinkerBle(
 
     // ═══════════════════════════════════════════════════════════════
     //  REMOTE COMMANDS  –  via SWCAN
-    //
-    //  Sequences reproduced 1:1 from tested nRF Connect macros:
-    //    AmperaE_OVMS_Wake_PREHEAT_ON_nRF.xml
-    //    AmperaE_OVMS_Wake_UNLOCK_nRF.xml
-    //    AmperaE_PREHEAT_OFF_nRF.xml
     // ═══════════════════════════════════════════════════════════════
 
     fun lock()       = executeRemote("Lock",        lockSteps())
@@ -440,22 +496,6 @@ class VLinkerBle(
         }
     }
 
-    /**
-     * SWCAN HV wake sequence – exact reproduction of the tested nRF macros.
-     *
-     * 1. ATE0              echo off
-     * 2. STP 61            SWCAN 11-bit 33.3 kbps
-     * 3. STPO              open protocol
-     * 4. STCSWM 2          HV wakeup transceiver mode
-     * 5. ATSH100           set header to 0x100
-     * 6. ATRTR             send RTR frame (HV pulse on ID 100)
-     * 7. STCSWM 3          return transceiver to normal mode
-     * 8. ATSH621           set header to 0x621
-     * 9. 00FFFFFFFFFF0000  BCM wake frame (8 bytes)
-     * 10. STP 62           switch to SWCAN 29-bit 33.3 kbps
-     * 11. STPO             open protocol
-     * 12. ATSH1024E097     set extended 29-bit header
-     */
     private fun wakeSteps(): List<Step> = listOf(
         Step("ATE0",               200),
         Step("STP 61",             150),
@@ -510,8 +550,11 @@ class VLinkerBle(
         cmdQueue.clear()
         cmdBusy = false
         sequenceBusy = false
+        discardingLate = false
+        adapterReady = false
         pendingCallback = null
         timeoutRunnable?.let { handler.removeCallbacks(it) }
+        discardRunnable?.let { handler.removeCallbacks(it) }
         try { gatt?.disconnect() } catch (_: Exception) {}
         cleanup()
     }
