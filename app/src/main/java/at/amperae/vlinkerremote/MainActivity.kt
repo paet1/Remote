@@ -1,9 +1,11 @@
 package at.amperae.vlinkerremote
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.MotionEvent
 import android.view.View
 import android.widget.Button
 import android.widget.ScrollView
@@ -76,6 +78,8 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
         ble = VLinkerBle(this, this)
         setRemoteButtonsEnabled(false)
         btnSoc.isEnabled = false
+
+        setupLogScrolling()
 
         btnConnect.setOnClickListener {
             if (ble.isConnected) {
@@ -186,6 +190,21 @@ class MainActivity : AppCompatActivity(), VLinkerBle.Listener {
                 "Preheat OFF" ->
                     tvClimateStatus.text = getString(R.string.climate_status_off)
             }
+        }
+    }
+
+    // ── log scroll fix ──
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupLogScrolling() {
+        scrollLog.setOnTouchListener { v, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE ->
+                    v.parent.requestDisallowInterceptTouchEvent(true)
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
+                    v.parent.requestDisallowInterceptTouchEvent(false)
+            }
+            false
         }
     }
 

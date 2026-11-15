@@ -264,10 +264,10 @@ class VLinkerBle(
     private fun initAdapter() {
         listener.onLog("Initialising adapter …")
         runTimedSteps(listOf(
-            Step("ATZ",  1200),
-            Step("ATE0",  200),
+            Step("ATE0",  300),
             Step("ATL0",  150),
-            Step("ATS1",  150)
+            Step("ATS1",  150),
+            Step("ATH1",  150),
         )) { ok ->
             listener.onLog(if (ok) "Adapter ready" else "⚠ Init incomplete")
         }
@@ -293,12 +293,21 @@ class VLinkerBle(
 
     private fun setupHsCan(then: () -> Unit) {
         runTimedSteps(listOf(
-            Step("ATSP6",  200),   // ISO 15765-4 CAN 500 kbps 11-bit
-            Step("ATST96", 200),   // timeout ~600 ms
-            Step("ATAL",   150),   // allow long messages
-            Step("ATH0",   150),   // headers off for cleaner parsing
-            Step("ATS1",   150)    // spaces on
-        )) { _ -> then() }
+            Step("ATSP6",     250),   // ISO 15765-4 CAN 500 kbps 11-bit
+            Step("STPO",      200),   // open protocol (needed on STN chips)
+            Step("ATST96",    200),   // timeout ~600 ms
+            Step("ATAL",      150),   // allow long messages
+            Step("ATH1",      150),   // headers on for reliable parsing
+            Step("ATS1",      150),   // spaces on
+            Step("ATSH7E4",   150),   // set TX header to battery ECU
+            Step("ATCRA7EC",  150),   // filter RX to battery ECU response only
+            Step("ATFCSH7E4", 150),   // flow control source header
+            Step("ATFCSD300000",150), // flow control data
+            Step("ATFCSM1",   150),   // flow control mode: user defined
+        )) { ok ->
+            if (!ok) listener.onLog("⚠ HS-CAN setup incomplete")
+            then()
+        }
     }
 
     private fun schedulePoll() {
@@ -307,32 +316,37 @@ class VLinkerBle(
     }
 
     private fun pollSoc() {
-        send("ATSH7E4") { _ ->
-            handler.postDelayed({
-                send("228334") { resp ->
-                    parseSocResponse(resp)
-                    if (pollingActive) pollBatteryInfo()
-                }
-            }, 100)
+        send("228334") { resp ->
+            parseSocResponse(resp)
+            if (pollingActive) pollBatteryInfo()
         }
     }
 
     private fun parseSocResponse(resp: String) {
         val parts = resp.replace("\r", " ").replace("\n", " ").trim()
             .split("\\s+".toRegex())
+        // With ATH1, response is like: 7EC 04 62 83 34 A5
+        // Without headers:             62 83 34 A5
+        // Find the service response byte "62" followed by PID "83 34"
         val idx = parts.indexOfFirst { it.equals("62", true) }
         if (idx >= 0 && idx + 3 < parts.size
             && parts[idx + 1].equals("83", true)
             && parts[idx + 2].equals("34", true)
         ) {
             parts[idx + 3].toIntOrNull(16)?.let { b ->
-                listener.onSocUpdate(b * 100f / 255f)
+                val soc = b * 100f / 255f
+                listener.onLog("SOC: %.1f%%".format(soc))
+                listener.onSocUpdate(soc)
                 return
             }
         }
         val cleaned = resp.trim()
-        if (!cleaned.contains("NO DATA", true) && cleaned.isNotBlank()) {
-            listener.onLog("SOC parse: $cleaned")
+        if (cleaned.contains("NO DATA", true)) {
+            listener.onLog("SOC: NO DATA – ECU not responding")
+        } else if (cleaned.contains("ERROR", true)) {
+            listener.onLog("SOC: CAN ERROR")
+        } else if (cleaned.isNotBlank()) {
+            listener.onLog("SOC raw: $cleaned")
         }
     }
 
@@ -343,18 +357,14 @@ class VLinkerBle(
                 val voltage = parseTwoBytes(vResp, "43", "6B")?.let { it / 2f }
                 send("22436C") { cResp ->
                     val current = parseTwoBytes(cResp, "43", "6C")?.let { it / 20f }
-                    send("ATSH7E4") { _ ->
-                        handler.postDelayed({
-                            send("2245F9") { capResp ->
-                                val cap = parseTwoBytes(capResp, "45", "F9")?.let { it * 0.0032f }
-                                listener.onBatteryInfo(tempC, voltage, current, cap)
-                                if (pollingActive) {
-                                    val r = Runnable { schedulePoll() }
-                                    pollRunnable = r
-                                    handler.postDelayed(r, POLL_INTERVAL_MS)
-                                }
-                            }
-                        }, 100)
+                    send("2245F9") { capResp ->
+                        val cap = parseTwoBytes(capResp, "45", "F9")?.let { it * 0.0032f }
+                        listener.onBatteryInfo(tempC, voltage, current, cap)
+                        if (pollingActive) {
+                            val r = Runnable { schedulePoll() }
+                            pollRunnable = r
+                            handler.postDelayed(r, POLL_INTERVAL_MS)
+                        }
                     }
                 }
             }
@@ -421,7 +431,11 @@ class VLinkerBle(
             listener.onCommandDone(label, ok)
             sequenceBusy = false
             if (wasPoll) {
-                handler.postDelayed({ setupHsCan { startSocPolling() } }, 1000)
+                listener.onLog("Restarting SOC polling …")
+                handler.postDelayed({
+                    pollingActive = false
+                    setupHsCan { startSocPolling() }
+                }, 1500)
             }
         }
     }
